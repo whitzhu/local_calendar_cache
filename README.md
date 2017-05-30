@@ -81,5 +81,8 @@ The server should respond to the following request via JSON in the format of the
 ## Running the Project
 1. Install node.js and npm
 2. CD into directory and run 'npm install'
-3. Run 'npm run start'
-4. Go to browser and navigate to http://localhost:3007/ for Hello World
+3. Download Google Calendar Credientials 'client_secret.json' 
+4. Run 'redis-server'
+5. Run 'npm run start'
+6. Go to browser and navigate to http://localhost:3007/ for Hello World
+7. Go to browser and navigate to http://localhost:3007/calendar-events for Recent Calendar Events
