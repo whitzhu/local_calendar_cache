@@ -2,6 +2,7 @@ const fs = require('fs');
 const readline = require('readline');
 const google = require('googleapis');
 const googleAuth = require('google-auth-library');
+const redisClient = require('./redisConfig');
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
 const TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH ||
@@ -17,7 +18,7 @@ const authorize = function(req, res, credentials, callback ) {
 
   fs.readFile(TOKEN_PATH, function(err, token) {
     if (err) {
-      getNewToken(oauth2Client, callback);
+      getNewToken(req, res, oauth2Client, callback);
     } else {
       oauth2Client.credentials = JSON.parse(token);
       callback(req, res, oauth2Client);
@@ -25,19 +26,27 @@ const authorize = function(req, res, credentials, callback ) {
   });
 }
 
-const getNewToken = function(oauth2Client, callback) {
+const getNewToken = function(req, res, oauth2Client, callback) {
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES
   });
-  console.log('Authorize this app by visiting this url: ', authUrl);
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-  rl.question('Enter the code from that page here: ', function(code) {
-    rl.close();
-    oauth2Client.getToken(code, function(err, token) {
+  const code = req.code;
+  code === undefined ? res.redirect(authUrl) : null ;
+  oauth2Client.getToken(code, function(err, token) {
+      if (err) {
+        console.log('Error while trying to retrieve access token', err);
+        return;
+      }
+      oauth2Client.credentials = token;
+      storeToken(token);
+      callback(oauth2Client);
+      res.redirect('/calendar-events');
+  })
+}
+
+const storeNewToken = function(req, res, oauth2Client, callback) {
+  oauth2Client.getToken(code, function(err, token) {
       if (err) {
         console.log('Error while trying to retrieve access token', err);
         return;
@@ -46,7 +55,6 @@ const getNewToken = function(oauth2Client, callback) {
       storeToken(token);
       callback(oauth2Client);
     });
-  });
 }
 
 const storeToken = function(token) {
@@ -73,7 +81,6 @@ const listEvents = function(req, res, auth) {
   }, function(err, response) {
     if (err) {
       console.log('The API returned an error: ' + err);
-      res.status(500).send('The API returned an error: ' + err)
       return;
     }
     var events = response.items;
@@ -84,6 +91,13 @@ const listEvents = function(req, res, auth) {
       events = events.map( event => {
         return { start: event.start, end: event.end, title: event.summary, description: event.description, attendees: event.attendees}
       })
+
+      events = JSON.stringify(events);
+
+      redisClient.setexAsync('user:events', 600, events)
+        .then( console.log('SUCCESS: caching event(s)'))
+        .catch( err => console.error('ERROR: caching event(s): ', err));
+
       res.send(events);
     }
   });
@@ -91,6 +105,7 @@ const listEvents = function(req, res, auth) {
 }
 
 const getCalendarEvents = function(req, res) {
+  console.log('getCalendarEvents invoked!');
   fs.readFile('client_secret.json', function processClientSecrets(err, content) {
     if (err) {
       console.log('Error loading client secret file: ' + err);
