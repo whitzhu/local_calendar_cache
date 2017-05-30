@@ -67,7 +67,7 @@ const listEvents = function(req, res, auth) {
     auth: auth,
     calendarId: 'primary',
     timeMin: (new Date()).toISOString(),
-    maxResults: 16,
+    maxResults: 10,
     singleEvents: true,
     orderBy: 'startTime'
   }, function(err, response) {
